@@ -250,7 +250,6 @@ func NewCmdCreateEdge() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			name := args[0]
 			nsxtclient.CreateEdge(name, template, address, root_password, admin_password)
-			fmt.Println(debug)
 		},
 		PostRunE: func(c *cobra.Command, args []string) error {
 			nsxtclient.Logout()
@@ -265,7 +264,14 @@ func NewCmdCreateEdge() *cobra.Command {
 	edgeCmd.MarkFlagRequired("address")
 	edgeCmd.MarkFlagRequired("root_password")
 	edgeCmd.MarkFlagRequired("admin_password")
-
+	edgeCmd.RegisterFlagCompletionFunc("template", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		Login()
+		edge_names := []string{}
+		for _, e := range nsxtclient.GetEdge() {
+			edge_names = append(edge_names, e.Name)
+		}
+		return edge_names, cobra.ShellCompDirectiveNoFileComp
+	})
 	return edgeCmd
 }
 
@@ -368,4 +374,63 @@ func NewCmdShowEdgeCluster() *cobra.Command {
 	}
 
 	return tpnCmd
+}
+
+func NewCmdShowFailureDomain() *cobra.Command {
+	aliases := []string{"fd"}
+	fdCmd := &cobra.Command{
+		Use:     "failure-domain",
+		Aliases: aliases,
+		Short:   fmt.Sprintf("show failure domain [%s]", strings.Join(aliases, ",")),
+		Args:    cobra.MaximumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			fds := nsxtclient.GetFailureDomains()
+
+			w := tabwriter.NewWriter(os.Stdout, 0, 1, 3, ' ', 0)
+			w.Write([]byte(strings.Join([]string{"ID", "Name", "PreferredActiveEdgeServices"}, "\t") + "\n"))
+			for _, fd := range fds {
+				fd.Print(w)
+			}
+			w.Flush()
+		},
+	}
+	return fdCmd
+}
+
+func NewCmdCreateFailureDomain() *cobra.Command {
+	var preferred_active_edge_services string
+	aliases := []string{"fd"}
+	fdCmd := &cobra.Command{
+		Use:     "failure-domain",
+		Aliases: aliases,
+		Short:   fmt.Sprintf("create failure domain [%s]", strings.Join(aliases, ",")),
+		Args:    cobra.MinimumNArgs(1),
+		PreRunE: func(c *cobra.Command, args []string) error {
+			site, err := conf.NsxT.GetCurrentSite()
+			if err != nil {
+				log.Fatal(err)
+			}
+			if len(args) == 0 {
+				log.Fatal("failure domain name is required")
+			}
+			nsxtclient.Login(site.GetCredential())
+			return nil
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			name := args[0]
+			nsxtclient.CreateFailureDomain(name, preferred_active_edge_services)
+		},
+		PostRunE: func(c *cobra.Command, args []string) error {
+			nsxtclient.Logout()
+			return nil
+		},
+	}
+	fdCmd.Flags().StringVarP(&preferred_active_edge_services, "preferred_active_edge_services", "", "", "preferred_active_edge_services flag (true/false/unset)")
+	fdCmd.MarkFlagRequired("name")
+	fdCmd.RegisterFlagCompletionFunc("preferred_active_edge_services", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		Login()
+		arr := []string{"true", "false", "unset"}
+		return arr, cobra.ShellCompDirectiveNoFileComp
+	})
+	return fdCmd
 }

@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/hichtakk/nsxctl/structs"
 )
@@ -256,7 +257,11 @@ func (c *NsxtClient) GetTransportNodeStatus(id string) string {
 	if res.Error != nil {
 		return ""
 	}
-	return res.Body.(map[string]interface{})["status"].(string)
+	status := res.Body.(map[string]interface{})["status"]
+	if status != nil {
+			return status.(string)
+	}
+	return "UNKNOWN"
 }
 
 func (c *NsxtClient) GetTransportNodeById(uuid string) *structs.TransportNode {
@@ -335,4 +340,43 @@ func (c *NsxtClient) GetEdge() []structs.TransportNode {
 	}
 
 	return edges
+}
+
+func (c *NsxtClient) GetFailureDomains() []structs.FailureDomain {
+	path := "/api/v1/failure-domains"
+	res := c.Request("GET", path, nil, nil)
+	fds := []structs.FailureDomain{}
+	for _, tmp := range res.Body.(map[string]interface{})["results"].([]interface{}) {
+		tmp2 := tmp.(map[string]interface{})
+		fd := structs.FailureDomain{}
+		fd.Id = tmp2["id"].(string)
+		fd.Name = tmp2["display_name"].(string)
+		if tmp2["preferred_active_edge_services"] == nil {
+			fd.PreferredActiveEdgeServices = "unset"
+		} else {
+			fd.PreferredActiveEdgeServices =  strconv.FormatBool(tmp2["preferred_active_edge_services"].(bool))
+		}
+		fds = append(fds, fd)
+	}
+
+	return fds
+}
+
+func (c *NsxtClient) CreateFailureDomain(name string, preferred_active_edge_services string) {
+	fd := make(map[string]string)
+	fd["display_name"] = name
+	if preferred_active_edge_services != "unset" {
+		fd["preferred_active_edge_services"] = preferred_active_edge_services
+	}
+
+	jsonObj, err := json.Marshal(fd)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+
+	path := "/api/v1/failure-domains"
+	var resp *Response
+	resp = c.Request("POST", path, nil, jsonObj)
+	fmt.Println(resp)
 }

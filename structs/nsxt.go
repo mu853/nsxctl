@@ -327,7 +327,7 @@ type TransportNode struct {
 	HostSwitchSpec         HostSwitchSpec         `json:"host_switch_spec"`
 	EdgeNodeDeploymentInfo EdgeNodeDeploymentInfo `json:"node_deployment_info"`
 	ResourceType           string                 `json:"resource_type"`
-	Tunnels                TransportNodeTunnels
+	Tunnels                TransportNodeTunnels   `json:",omitempty"`
 }
 
 type TransportNodeTunnels []TransportNodeTunnel
@@ -530,7 +530,7 @@ type Tier1Gateway struct {
 	HaMode        string `json:"ha_mode"`
 	Name          string `json:"display_name"`
 	FailoverMode  string `json:"failover_mode"`
-	RealizationId string `json:"realization_id"`
+	RealizationId string `json:"unique_id"`
 	Path          string `json:"path"`
 }
 
@@ -738,4 +738,18 @@ func (r *DfwRule) PrintCsv(w *csv.Writer, policy DfwPolicy) {
 		log.Fatal(err)
 		return
 	}
+}
+
+type FailureDomain struct {
+	Id                           string
+	Name                         string
+	PreferredActiveEdgeServices  string
+}
+
+func (fd *FailureDomain) Print(w *tabwriter.Writer) {
+	pa := ""
+	if fd.PreferredActiveEdgeServices != "unset" {
+		pa = fd.PreferredActiveEdgeServices
+	}
+	w.Write([]byte(strings.Join([]string{fd.Id, fd.Name, pa}, "\t") + "\n"))
 }
